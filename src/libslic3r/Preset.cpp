@@ -2793,34 +2793,63 @@ size_t PresetCollection::first_visible_idx_by_type(const std::string& filament_t
 {
     size_t start = m_default_suppressed ? m_num_default_presets : 0;
 
-    // Find the first visible, compatible, system base preset whose filament_type matches target.
-    auto find_by_type = [&](const std::string& target) -> size_t {
+    // new lambda taking user and child variables for search
+    auto find_by_type = [&](const std::string& target, bool user, bool want_child) -> size_t {
         for (size_t i = start; i < m_presets.size(); ++i) {
             const auto& p = m_presets[i];
-            if (p.is_visible && p.is_compatible && p.is_system
-                && get_preset_base(p) == &p
-                && p.config.opt_string("filament_type", 0u) == target)
-                return i;
+            std::string p_type = p.config.opt_string("filament_type", 0u);
+
+            if (p_type != target || !p.is_visible || !p.is_compatible) continue;
+
+            if (user) {
+                if (!p.is_system) {
+                    BOOST_LOG_TRIVIAL(info) << "Match found! Using user preset: " << p.name;
+                    return i;
+                }
+            } else {
+                if (!p.is_system) continue;
+
+                // Check for children
+                bool is_parent = false;
+                for (const auto& other : m_presets) {
+                    if (&other != &p && get_preset_base(other) == &p) {
+                        is_parent = true;
+                        break;
+                    }
+                }
+
+                if (want_child && !is_parent) {
+                    BOOST_LOG_TRIVIAL(info) << "Match found! Using tuned system profile: " << p.name;
+                    return i;
+                }
+                else if (!want_child && get_preset_base(p) == &p) {
+                    BOOST_LOG_TRIVIAL(info) << "Match found! System base profile: " << p.name;
+                    return i;
+                }
+            }
         }
         return size_t(-1);
     };
 
-    // 1. Exact filament_type match
-    size_t idx = find_by_type(filament_type);
-    if (idx != size_t(-1))
-        return idx;
+    // 1. User Priority
+    size_t idx = find_by_type(filament_type, true, true);
+    if (idx != size_t(-1)) return idx;
 
-    // 2. Base type fallback: strip modifier after first space
-    //    e.g. "PLA High Speed" -> "PLA"
-    //    Dash-separated types like "PA-CF", "PET-CF" are distinct materials, not modifiers.
+    // 2. System Tuned
+    idx = find_by_type(filament_type, false, true);
+    if (idx != size_t(-1)) return idx;
+
+    // 3. System Generic
+    idx = find_by_type(filament_type, false, false);
+    if (idx != size_t(-1)) return idx;
+
+    // 4. Modifier Fallback ("PLA High Speed" -> "PLA")
     auto sep = filament_type.find(' ');
     if (sep != std::string::npos) {
-        idx = find_by_type(filament_type.substr(0, sep));
-        if (idx != size_t(-1))
-            return idx;
+        idx = find_by_type(filament_type.substr(0, sep), false, false);
+        if (idx != size_t(-1)) return idx;
     }
 
-    // 3. Any visible preset
     return first_visible_idx();
 }
 
