@@ -2338,7 +2338,7 @@ void PresetBundle::get_ams_cobox_infos(AMSComboInfo& combox_info)
     }
 }
 
-unsigned int PresetBundle::sync_ams_list(std::vector<std::pair<DynamicPrintConfig *,std::string>> &unknowns, bool use_map, std::map<int, AMSMapInfo> &maps, bool enable_append, MergeFilamentInfo &merge_info, bool color_only)
+unsigned int PresetBundle::sync_ams_list(std::vector<std::pair<DynamicPrintConfig *,std::string>> &unknowns, bool use_map, std::map<int, AMSMapInfo> &maps, bool enable_append, MergeFilamentInfo &merge_info, bool color_only, bool prefer_custom)
 {
     BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << "use_map:" << use_map << " enable_append:" << enable_append;
     std::vector<std::string> ams_filament_presets;
@@ -2409,33 +2409,30 @@ unsigned int PresetBundle::sync_ams_list(std::vector<std::pair<DynamicPrintConfi
         bool has_type = false;
         auto iter = filaments.end();
 
-        BOOST_LOG_TRIVIAL(info) << "Syncing Tray: Requesting [" << filament_type << "] with ID [" << filament_id << "]";
+        if (prefer_custom) {
+            for (auto it = filaments.begin(); it != filaments.end(); ++it) {
+                if (!it->is_compatible) continue;
 
-        // PASS 1: Strict Custom Match (User profile must match both Type and ID)
-        for (auto it = filaments.begin(); it != filaments.end(); ++it) {
-            if (!it->is_compatible) continue;
+                std::string profile_type = it->config.opt_string("filament_type", 0u);
+                if (profile_type == filament_type) has_type = true;
 
-            std::string profile_type = it->config.opt_string("filament_type", 0u);
-            if (profile_type == filament_type) has_type = true;
-
-            if (!it->is_system && !it->is_default &&
-                profile_type == filament_type &&
-                it->filament_id == filament_id) {
-                iter = it;
-            BOOST_LOG_TRIVIAL(info) << "Syncing Tray: Priority Match Found: " << it->name;
-            break;
-                }
+                if (!it->is_system && !it->is_default &&
+                    profile_type == filament_type &&
+                    it->filament_id == filament_id) {
+                    iter = it;
+                    break;
+                    }
+            }
         }
 
-        // PASS 2: Safe System Fallback
+
         if (iter == filaments.end()) {
             for (auto it = filaments.begin(); it != filaments.end(); ++it) {
                 if (it->is_compatible && it->is_system &&
                     it->config.opt_string("filament_type", 0u) == filament_type &&
                     it->filament_id == filament_id) {
                     iter = it;
-                BOOST_LOG_TRIVIAL(info) << "Syncing Tray: Falling back to Safe System Profile: " << it->name;
-                break;
+                    break;
                     }
             }
         }

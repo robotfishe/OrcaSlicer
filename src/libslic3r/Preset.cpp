@@ -2789,41 +2789,45 @@ size_t PresetCollection::first_visible_idx() const
     return first_visible;
 }
 
-size_t PresetCollection::first_visible_idx_by_type(const std::string& filament_type) const
+size_t PresetCollection::first_visible_idx_by_type(const std::string& filament_type, bool want_user, bool want_child) const
 {
     size_t start = m_default_suppressed ? m_num_default_presets : 0;
 
     // new lambda taking user and child variables for search
-    auto find_by_type = [&](const std::string& target, bool user, bool want_child) -> size_t {
+    auto find_by_type = [&](const std::string& target) -> size_t {
+        BOOST_LOG_TRIVIAL(info) << "find_by_type searching, want_user is " << want_user << ", want_child is " << want_child;
         for (size_t i = start; i < m_presets.size(); ++i) {
             const auto& p = m_presets[i];
             std::string p_type = p.config.opt_string("filament_type", 0u);
 
             if (p_type != target || !p.is_visible || !p.is_compatible) continue;
 
-            if (user) {
+            if (want_user) {
                 if (!p.is_system) {
-                    BOOST_LOG_TRIVIAL(info) << "Match found! Using user preset: " << p.name;
+                    BOOST_LOG_TRIVIAL(info) << "User preset match found: " << p.name;
                     return i;
                 }
             } else {
                 if (!p.is_system) continue;
 
-                // Check for children
+                BOOST_LOG_TRIVIAL(info) << p.name << " is system preset, checking for children";
+
+                // Check for (non-custom) children
                 bool is_parent = false;
                 for (const auto& other : m_presets) {
-                    if (&other != &p && get_preset_base(other) == &p) {
+                    if (&other != &p && get_preset_base(other) == &p && other.is_system) {
                         is_parent = true;
+                        BOOST_LOG_TRIVIAL(info) << p.name << " is parent!";
                         break;
                     }
                 }
 
                 if (want_child && !is_parent) {
-                    BOOST_LOG_TRIVIAL(info) << "Match found! Using tuned system profile: " << p.name;
+                    BOOST_LOG_TRIVIAL(info) << "Printer-specific match found: " << p.name;
                     return i;
                 }
                 else if (!want_child && get_preset_base(p) == &p) {
-                    BOOST_LOG_TRIVIAL(info) << "Match found! System base profile: " << p.name;
+                    BOOST_LOG_TRIVIAL(info) << "System base match found: " << p.name;
                     return i;
                 }
             }
@@ -2831,22 +2835,13 @@ size_t PresetCollection::first_visible_idx_by_type(const std::string& filament_t
         return size_t(-1);
     };
 
-    // 1. User Priority
-    size_t idx = find_by_type(filament_type, true, true);
+    size_t idx = find_by_type(filament_type);
     if (idx != size_t(-1)) return idx;
 
-    // 2. System Tuned
-    idx = find_by_type(filament_type, false, true);
-    if (idx != size_t(-1)) return idx;
-
-    // 3. System Generic
-    idx = find_by_type(filament_type, false, false);
-    if (idx != size_t(-1)) return idx;
-
-    // 4. Modifier Fallback ("PLA High Speed" -> "PLA")
+    // Modifier Fallback ("PLA High Speed" -> "PLA")
     auto sep = filament_type.find(' ');
     if (sep != std::string::npos) {
-        idx = find_by_type(filament_type.substr(0, sep), false, false);
+        idx = find_by_type(filament_type.substr(0, sep));
         if (idx != size_t(-1)) return idx;
     }
 
@@ -2855,7 +2850,9 @@ size_t PresetCollection::first_visible_idx_by_type(const std::string& filament_t
 
 std::string PresetCollection::filament_id_by_type(const std::string& filament_type) const
 {
-    return preset(first_visible_idx_by_type(filament_type)).filament_id;
+    // currently hard-coded to "false, false" to maintain existing functionality for Qidi and Snapmaker printers
+    // in the future, QidiPrinterAgent.cpp and SnapmakerPrinterAgent could be edited to take advantage of the "prefer custom" option
+    return preset(first_visible_idx_by_type(filament_type,false,false)).filament_id;
 }
 
 std::vector<std::string> PresetCollection::diameters_of_selected_printer()
