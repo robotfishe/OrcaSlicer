@@ -809,6 +809,12 @@ bool MoonrakerPrinterAgent::fetch_afc_filament_info(std::vector<AmsTrayData>& tr
         size_t internal_idx = size_t(-1);
         BOOST_LOG_TRIVIAL(debug) << "Filament sync: Looking for profile for material type " << tray.tray_type;
         if (bundle) {
+
+            if (tray.tray_type.empty()) {
+                tray.tray_info_idx = "";
+                BOOST_LOG_TRIVIAL(debug) << "Filament sync: Tray " << i << " is empty. Skipping search.";
+            }
+
             if (prefer_custom == true) {
                 internal_idx = bundle->filaments.first_visible_idx_by_type(tray.tray_type,true,true);
 
@@ -988,6 +994,12 @@ bool MoonrakerPrinterAgent::fetch_hh_filament_info(std::vector<AmsTrayData>& tra
         bool prefer_custom = GUI::wxGetApp().app_config->get("filament_sync_prefer_custom") == "true";
         size_t internal_idx = size_t(-1);
         if (bundle) {
+
+            if (tray.tray_type.empty()) {
+                tray.tray_info_idx = "";
+                BOOST_LOG_TRIVIAL(debug) << "Filament sync: Tray " << i << " is empty. Skipping search.";
+            }
+
             if (prefer_custom == true) {
                 internal_idx = bundle->filaments.first_visible_idx_by_type(tray.tray_type,true,true);
 
