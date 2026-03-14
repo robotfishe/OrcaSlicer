@@ -997,7 +997,7 @@ bool MoonrakerPrinterAgent::fetch_hh_filament_info(std::vector<AmsTrayData>& tra
 
             if (tray.tray_type.empty()) {
                 tray.tray_info_idx = "";
-                BOOST_LOG_TRIVIAL(debug) << "Filament sync: Tray " << lane_index << " is empty. Skipping search.";
+                BOOST_LOG_TRIVIAL(debug) << "Filament sync: Tray " << gate_idx << " is empty. Skipping search.";
             }
 
             if (prefer_custom == true) {
